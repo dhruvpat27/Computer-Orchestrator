@@ -1,4 +1,3 @@
-
 services:
   postgres:
     image: postgres:16-alpine
@@ -27,13 +26,45 @@ services:
       timeout: 3s
       retries: 10
 
-  controlplane:
+  # Three replicas of the same control-plane image. Only one will hold the
+  # Postgres advisory lock and act as leader at any given time - the others
+  # still accept job submissions but sit out of retry scheduling.
+  controlplane-1:
     build: ./controlplane
     environment:
       DATABASE_URL: postgres://orchestrator:orchestrator@postgres:5432/orchestrator
       REDIS_URL: redis://redis:6379/0
+      REPLICA_ID: controlplane-1
     ports:
-      - "8000:8000"
+      - "8001:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  controlplane-2:
+    build: ./controlplane
+    environment:
+      DATABASE_URL: postgres://orchestrator:orchestrator@postgres:5432/orchestrator
+      REDIS_URL: redis://redis:6379/0
+      REPLICA_ID: controlplane-2
+    ports:
+      - "8002:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  controlplane-3:
+    build: ./controlplane
+    environment:
+      DATABASE_URL: postgres://orchestrator:orchestrator@postgres:5432/orchestrator
+      REDIS_URL: redis://redis:6379/0
+      REPLICA_ID: controlplane-3
+    ports:
+      - "8003:8000"
     depends_on:
       postgres:
         condition: service_healthy
@@ -44,12 +75,19 @@ services:
     build: ./worker
     environment:
       REDIS_URL: redis://redis:6379/0
-      CONTROL_PLANE_URL: http://controlplane:8000
+      # comma-separated list - worker tries each in order until one answers
+      CONTROL_PLANE_URLS: "http://controlplane-1:8000,http://controlplane-2:8000,http://controlplane-3:8000"
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+      controlplane-1:
+        condition: service_started
+      controlplane-2:
+        condition: service_started
+      controlplane-3:
+        condition: service_started
 
 volumes:
   pgdata:

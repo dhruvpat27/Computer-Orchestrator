@@ -37,12 +37,17 @@ func main() {
 	rdb = redis.NewClient(opt)
 	defer rdb.Close()
 
-	// Retry scheduler runs forever in the background, promoting jobs whose
-	// backoff window has elapsed back onto the queue.
-	go retryScheduler(ctx)
+	// Leader election runs forever in the background. It grants this replica
+	// the retry-scheduler job only when it holds the Postgres advisory lock.
+	replicaID := os.Getenv("REPLICA_ID")
+	if replicaID == "" {
+		replicaID = "unknown-replica"
+	}
+	go runLeaderElection(ctx, pool, replicaID)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", handleHealth)
+	mux.HandleFunc("GET /leader", handleLeaderStatus(replicaID))
 	mux.HandleFunc("POST /jobs", handleSubmitJob)
 	mux.HandleFunc("GET /jobs", handleListJobs)
 	mux.HandleFunc("GET /jobs/{id}", handleGetJob)

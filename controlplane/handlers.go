@@ -13,6 +13,17 @@ func handleHealth(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
+// handleLeaderStatus lets you (or a dashboard) ask any replica "are you in
+// charge right now?" - this is what makes leadership visible from outside.
+func handleLeaderStatus(replicaID string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]any{
+			"replica_id": replicaID,
+			"is_leader":  isLeader.Load(),
+		})
+	}
+}
+
 func handleSubmitJob(w http.ResponseWriter, r *http.Request) {
 	var req SubmitJobRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {

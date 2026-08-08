@@ -21,11 +21,20 @@ func backoffSeconds(attempt int) int {
 // sitting in FAILED_RETRY_PENDING whose backoff window has elapsed, flips
 // them back to QUEUED, and pushes them back onto the Redis queue. This is
 // what turns a failure into real retry semantics instead of "oh well."
+//
+// Only the elected leader runs this. It checks isLeader on every tick and
+// exits cleanly the moment leadership is lost - runLeaderElection starts a
+// fresh one if/when this replica becomes leader again.
 func retryScheduler(ctx context.Context) {
 	ticker := time.NewTicker(retryPollInterval)
 	defer ticker.Stop()
 
 	for range ticker.C {
+		if !isLeader.Load() {
+			log.Println("[retry-scheduler] no longer leader, stopping")
+			return
+		}
+
 		rows, err := pool.Query(ctx, `
 			UPDATE jobs
 			SET status = 'QUEUED', updated_at = now()

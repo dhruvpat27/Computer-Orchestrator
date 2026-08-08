@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -17,10 +18,10 @@ import (
 const queueKey = "job_queue"
 
 var (
-	rdb             *redis.Client
-	controlPlaneURL string
-	workerID        string
-	httpClient      = &http.Client{Timeout: 5 * time.Second}
+	rdb           *redis.Client
+	controlPlanes []string
+	workerID      string
+	httpClient    = &http.Client{Timeout: 3 * time.Second}
 )
 
 type QueueMessage struct {
@@ -31,10 +32,11 @@ type QueueMessage struct {
 
 func main() {
 	redisURL := mustEnv("REDIS_URL")
-	controlPlaneURL = os.Getenv("CONTROL_PLANE_URL")
-	if controlPlaneURL == "" {
-		controlPlaneURL = "http://controlplane:8000"
+	rawURLs := os.Getenv("CONTROL_PLANE_URLS")
+	if rawURLs == "" {
+		rawURLs = "http://controlplane-1:8000,http://controlplane-2:8000,http://controlplane-3:8000"
 	}
+	controlPlanes = strings.Split(rawURLs, ",")
 
 	hostname, _ := os.Hostname()
 	workerID = fmt.Sprintf("%s-%s", hostname, uuid.NewString()[:8])
@@ -98,11 +100,7 @@ func handleJob(ctx context.Context, msg QueueMessage) {
 
 func reportStart(jobID string) error {
 	body, _ := json.Marshal(map[string]string{"worker_id": workerID})
-	resp, err := httpClient.Post(
-		fmt.Sprintf("%s/jobs/%s/start", controlPlaneURL, jobID),
-		"application/json",
-		bytes.NewReader(body),
-	)
+	resp, err := postWithFailover(fmt.Sprintf("/jobs/%s/start", jobID), body)
 	if err != nil {
 		return err
 	}
@@ -120,16 +118,34 @@ func reportResult(jobID string, success bool, result map[string]any, errMsg stri
 	}
 	body, _ := json.Marshal(payload)
 
-	resp, err := httpClient.Post(
-		fmt.Sprintf("%s/jobs/%s/report", controlPlaneURL, jobID),
-		"application/json",
-		bytes.NewReader(body),
-	)
+	resp, err := postWithFailover(fmt.Sprintf("/jobs/%s/report", jobID), body)
 	if err != nil {
 		log.Printf("failed to report result for job %s: %v", jobID, err)
 		return
 	}
 	defer resp.Body.Close()
+}
+
+// postWithFailover tries each known control-plane replica in order and
+// returns on the first one that answers. This is what lets a worker keep
+// reporting job results even while one replica is down or mid-election -
+// no single control-plane instance is a hard dependency for the worker.
+func postWithFailover(path string, body []byte) (*http.Response, error) {
+	var lastErr error
+	for _, base := range controlPlanes {
+		resp, err := httpClient.Post(base+path, "application/json", bytes.NewReader(body))
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		if resp.StatusCode >= 500 {
+			resp.Body.Close()
+			lastErr = fmt.Errorf("%s returned %d", base, resp.StatusCode)
+			continue
+		}
+		return resp, nil
+	}
+	return nil, fmt.Errorf("all control plane replicas unreachable: %v", lastErr)
 }
 
 func mustEnv(key string) string {

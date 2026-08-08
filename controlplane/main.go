@@ -46,6 +46,7 @@ func main() {
 	go runLeaderElection(ctx, pool, replicaID)
 
 	mux := http.NewServeMux()
+	mux.HandleFunc("GET /", handleDashboard)
 	mux.HandleFunc("GET /health", handleHealth)
 	mux.HandleFunc("GET /leader", handleLeaderStatus(replicaID))
 	mux.HandleFunc("POST /jobs", handleSubmitJob)
@@ -53,16 +54,35 @@ func main() {
 	mux.HandleFunc("GET /jobs/{id}", handleGetJob)
 	mux.HandleFunc("POST /jobs/{id}/start", handleStartJob)
 	mux.HandleFunc("POST /jobs/{id}/report", handleReportJob)
+	mux.HandleFunc("GET /system/workers", handleListWorkers)
+	mux.HandleFunc("GET /system/stats", handleStats)
+	mux.HandleFunc("POST /system/chaos/kill", handleChaosKill)
 
 	addr := ":8000"
 	log.Printf("control plane listening on %s", addr)
 	srv := &http.Server{
 		Addr:         addr,
-		Handler:      mux,
+		Handler:      withCORS(mux),
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 10 * time.Second,
 	}
 	log.Fatal(srv.ListenAndServe())
+}
+
+// withCORS lets the dashboard - served from one replica's origin - poll the
+// /leader endpoint on the other two replicas (different ports = different
+// origins from the browser's point of view).
+func withCORS(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 func mustEnv(key string) string {

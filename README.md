@@ -38,7 +38,24 @@ curl localhost:8002/jobs/<id>
 curl localhost:8003/jobs/<id>
 ```
 
-## See who's leader
+## The dashboard
+
+Open **http://localhost:8001** (or :8002 / :8003 - any replica serves it)
+in a browser. You get:
+- A topology strip showing all 3 replicas and which one currently holds
+  the leader lock, live
+- A worker grid pulled straight from the Docker API, each with its own
+  kill button
+- Queue depth and job status counts, updating every 2s
+- A recent-jobs table
+- A form to submit test jobs without touching curl
+- Two chaos buttons: **Kill Random Worker** and **Kill Leader**
+
+Click "Kill Leader" and watch the topology strip's glowing node jump to
+a different replica within a couple seconds - that's the whole point of
+Part 2, made visible instead of something you have to `curl /leader` to see.
+
+## See who's leader from the command line
 
 ```bash
 curl localhost:8001/leader
@@ -48,17 +65,17 @@ curl localhost:8003/leader
 
 Exactly one should say `"is_leader": true`.
 
-## The HA demo: kill the leader
+## The HA demo, manual version
 
+If you'd rather trigger this from the terminal instead of the dashboard
+buttons:
 1. Check which replica is currently leader with the `/leader` calls above.
 2. Kill its container - say it's `controlplane-2`:
    ```bash
    docker compose kill controlplane-2
    ```
 3. Within a few seconds, check `/leader` on the two survivors. One of them
-   will have flipped to `true` - Postgres released the advisory lock the
-   instant that container's connection died, and the next replica's
-   election loop grabbed it.
+   will have flipped to `true`.
 4. Submit a flaky job during/after the kill and watch it still retry and
    resolve normally - the worker's client-side failover means it never
    depended on the dead replica anyway.
@@ -97,6 +114,14 @@ PENDING -> QUEUED -> RUNNING -> SUCCESS
   `pg_try_advisory_lock`. Whoever holds the connection holds the lock;
   the connection dying (crash, kill, network drop) releases the lock
   automatically, no custom failure detection needed.
+- **Chaos mode** (`controlplane/chaos.go`) - each control-plane container
+  has `/var/run/docker.sock` mounted in, giving it a real (unauthenticated,
+  local-only) client to the Docker Engine API. The dashboard's kill buttons
+  hit `/system/chaos/kill`, which lists or kills containers directly -
+  no separate proxy or orchestration tool needed.
+- **Dashboard** (`controlplane/dashboard.html`, embedded via `go:embed`) -
+  polls each replica's `/leader`, plus this replica's `/system/workers`,
+  `/system/stats`, and `/jobs`, every 2 seconds.
 - **Worker** (`worker/`) - polls Redis with `BRPOP`, executes the named
   task, reports back to whichever control-plane replica answers first
   (`CONTROL_PLANE_URLS`, tried in order). Holds no state of its own.
@@ -106,13 +131,11 @@ PENDING -> QUEUED -> RUNNING -> SUCCESS
 
 ## What's next (not built yet)
 
-- **Chaos mode** - a dashboard button that triggers `docker kill` on a
-  random worker or the current leader live, so the self-healing is a
-  one-click demo instead of a manual `docker compose kill`.
-- **Live dashboard** - WebSocket-pushed view of queue depth, job states,
-  and which replica is currently leader.
-- **Load balancer / single entrypoint** - right now clients pick a replica
+- **Live dashboard over WebSockets** - right now it's 2-second polling,
+  which is simple and fine but not truly real-time.
+- **Load balancer / single entrypoint** - clients currently pick a replica
   themselves (`:8001`/`:8002`/`:8003`); a thin reverse proxy would give
   one stable address that survives any single replica dying, same as
   workers already get via client-side failover.
+- **DAG execution** - jobs with dependencies (A must finish before B runs).
 

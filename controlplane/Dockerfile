@@ -3,6 +3,7 @@ WORKDIR /app
 ENV GOTOOLCHAIN=auto
 COPY go.mod .
 COPY *.go .
+COPY dashboard.html .
 RUN go mod tidy && go build -o /controlplane .
 
 FROM alpine:3.20

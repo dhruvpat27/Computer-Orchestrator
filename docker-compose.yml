@@ -31,12 +31,16 @@ services:
   # still accept job submissions but sit out of retry scheduling.
   controlplane-1:
     build: ./controlplane
+    restart: unless-stopped
+    container_name: controlplane-1
     environment:
       DATABASE_URL: postgres://orchestrator:orchestrator@postgres:5432/orchestrator
       REDIS_URL: redis://redis:6379/0
       REPLICA_ID: controlplane-1
     ports:
       - "8001:8000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
     depends_on:
       postgres:
         condition: service_healthy
@@ -45,12 +49,16 @@ services:
 
   controlplane-2:
     build: ./controlplane
+    restart: unless-stopped
+    container_name: controlplane-2
     environment:
       DATABASE_URL: postgres://orchestrator:orchestrator@postgres:5432/orchestrator
       REDIS_URL: redis://redis:6379/0
       REPLICA_ID: controlplane-2
     ports:
       - "8002:8000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
     depends_on:
       postgres:
         condition: service_healthy
@@ -59,12 +67,16 @@ services:
 
   controlplane-3:
     build: ./controlplane
+    restart: unless-stopped
+    container_name: controlplane-3
     environment:
       DATABASE_URL: postgres://orchestrator:orchestrator@postgres:5432/orchestrator
       REDIS_URL: redis://redis:6379/0
       REPLICA_ID: controlplane-3
     ports:
       - "8003:8000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
     depends_on:
       postgres:
         condition: service_healthy

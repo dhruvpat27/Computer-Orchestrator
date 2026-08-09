@@ -38,6 +38,42 @@ curl localhost:8002/jobs/<id>
 curl localhost:8003/jobs/<id>
 ```
 
+## Workflows (DAG execution)
+
+Submit a whole pipeline of tasks with dependencies in one call - tasks that
+depend on others sit BLOCKED until every dependency succeeds, and get
+automatically SKIPPED (not left hanging forever) if a dependency
+permanently fails.
+
+```bash
+curl -X POST localhost:8001/workflows \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "training-pipeline",
+    "tasks": [
+      {"id": "fetch", "task_name": "sleep_task", "payload": {"seconds": 2}},
+      {"id": "train", "task_name": "flaky_task", "payload": {"fail_rate": 0.4}, "depends_on": ["fetch"], "max_retries": 5},
+      {"id": "evaluate", "task_name": "sleep_task", "payload": {"seconds": 1}, "depends_on": ["train"]}
+    ]
+  }'
+```
+
+Check the whole pipeline's status (swap in the workflow_id from the response above):
+```bash
+curl localhost:8001/workflows/<workflow_id>
+```
+
+Submitting a graph with a cycle (A depends on B, B depends on A) is
+rejected at submission time with a 400 - the server runs a DFS cycle check
+before inserting anything, so you can never get a workflow that's
+structurally impossible to complete.
+
+The easiest way to see this live: open the dashboard and click **Submit
+3-Stage Pipeline** in the bottom-right panel, then watch the Recent Jobs
+table - `train` sits `BLOCKED` until `fetch` hits `SUCCESS`, and if
+`train` exhausts its retries and lands on `FAILED`, `evaluate` flips
+straight to `SKIPPED` instead of waiting around.
+
 ## The dashboard
 
 Open **http://localhost:8001** (or :8002 / :8003 - any replica serves it)
@@ -100,6 +136,13 @@ PENDING -> QUEUED -> RUNNING -> SUCCESS
                           |
                           v (retries exhausted)
                         FAILED
+
+Workflow tasks with dependencies additionally start in:
+
+  BLOCKED --(all deps SUCCESS, leader only)--> QUEUED
+     |
+     v (any dep FAILED or SKIPPED)
+  SKIPPED
 ```
 
 ## Architecture
@@ -122,6 +165,13 @@ PENDING -> QUEUED -> RUNNING -> SUCCESS
 - **Dashboard** (`controlplane/dashboard.html`, embedded via `go:embed`) -
   polls each replica's `/leader`, plus this replica's `/system/workers`,
   `/system/stats`, and `/jobs`, every 2 seconds.
+- **DAG scheduler** (`controlplane/dag.go`, `controlplane/workflows.go`) -
+  workflows are submitted as a graph of tasks with local names and
+  dependencies; the server validates it's acyclic (DFS cycle check) before
+  inserting anything, resolves local names to real job UUIDs, and inserts
+  the whole graph in one transaction. A leader-gated background sweep
+  promotes BLOCKED jobs once every dependency succeeds, and cascades
+  SKIPPED status down the graph the moment a dependency permanently fails.
 - **Worker** (`worker/`) - polls Redis with `BRPOP`, executes the named
   task, reports back to whichever control-plane replica answers first
   (`CONTROL_PLANE_URLS`, tried in order). Holds no state of its own.
@@ -137,5 +187,6 @@ PENDING -> QUEUED -> RUNNING -> SUCCESS
   themselves (`:8001`/`:8002`/`:8003`); a thin reverse proxy would give
   one stable address that survives any single replica dying, same as
   workers already get via client-side failover.
-- **DAG execution** - jobs with dependencies (A must finish before B runs).
+- **DAG visualization** - render the dependency graph itself in the
+  dashboard, not just a flat table of jobs tagged with a workflow_id.
 

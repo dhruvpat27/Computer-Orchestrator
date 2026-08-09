@@ -45,7 +45,7 @@ func handleSubmitJob(w http.ResponseWriter, r *http.Request) {
 		INSERT INTO jobs (task_name, payload, status, retries_left, max_retries)
 		VALUES ($1, $2, 'QUEUED', $3, $3)
 		RETURNING id, task_name, payload, status, retries_left, max_retries, attempt,
-		          result, error, worker_id, created_at, updated_at
+		          result, error, worker_id, workflow_id, depends_on, created_at, updated_at
 	`, req.TaskName, req.Payload, req.MaxRetries)
 
 	job, err := scanJob(row)
@@ -71,7 +71,7 @@ func handleGetJob(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	row := pool.QueryRow(ctx, `
 		SELECT id, task_name, payload, status, retries_left, max_retries, attempt,
-		       result, error, worker_id, created_at, updated_at
+		       result, error, worker_id, workflow_id, depends_on, created_at, updated_at
 		FROM jobs WHERE id = $1
 	`, id)
 
@@ -85,19 +85,27 @@ func handleGetJob(w http.ResponseWriter, r *http.Request) {
 
 func handleListJobs(w http.ResponseWriter, r *http.Request) {
 	status := r.URL.Query().Get("status")
+	workflowID := r.URL.Query().Get("workflow_id")
 
 	var rows pgx.Rows
 	var err error
-	if status != "" {
+	switch {
+	case workflowID != "":
 		rows, err = pool.Query(ctx, `
 			SELECT id, task_name, payload, status, retries_left, max_retries, attempt,
-			       result, error, worker_id, created_at, updated_at
+			       result, error, worker_id, workflow_id, depends_on, created_at, updated_at
+			FROM jobs WHERE workflow_id = $1 ORDER BY created_at ASC
+		`, workflowID)
+	case status != "":
+		rows, err = pool.Query(ctx, `
+			SELECT id, task_name, payload, status, retries_left, max_retries, attempt,
+			       result, error, worker_id, workflow_id, depends_on, created_at, updated_at
 			FROM jobs WHERE status = $1 ORDER BY created_at DESC LIMIT 100
 		`, status)
-	} else {
+	default:
 		rows, err = pool.Query(ctx, `
 			SELECT id, task_name, payload, status, retries_left, max_retries, attempt,
-			       result, error, worker_id, created_at, updated_at
+			       result, error, worker_id, workflow_id, depends_on, created_at, updated_at
 			FROM jobs ORDER BY created_at DESC LIMIT 100
 		`)
 	}
@@ -111,7 +119,8 @@ func handleListJobs(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var j Job
 		if err := rows.Scan(&j.ID, &j.TaskName, &j.Payload, &j.Status, &j.RetriesLeft,
-			&j.MaxRetries, &j.Attempt, &j.Result, &j.Error, &j.WorkerID, &j.CreatedAt, &j.UpdatedAt); err != nil {
+			&j.MaxRetries, &j.Attempt, &j.Result, &j.Error, &j.WorkerID,
+			&j.WorkflowID, &j.DependsOn, &j.CreatedAt, &j.UpdatedAt); err != nil {
 			continue
 		}
 		jobs = append(jobs, j)

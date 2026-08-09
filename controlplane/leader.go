@@ -52,6 +52,7 @@ func runLeaderElection(ctx context.Context, pool *pgxpool.Pool, replicaID string
 		log.Printf("[election] %s ACQUIRED LEADERSHIP", replicaID)
 
 		go retryScheduler(ctx) // start the retry brain now that we're in charge
+		go dagScheduler(ctx)   // and the DAG brain - same leader-only gate
 
 		waitForConnDeath(ctx, conn)
 

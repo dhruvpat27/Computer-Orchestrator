@@ -54,6 +54,8 @@ func main() {
 	mux.HandleFunc("GET /jobs/{id}", handleGetJob)
 	mux.HandleFunc("POST /jobs/{id}/start", handleStartJob)
 	mux.HandleFunc("POST /jobs/{id}/report", handleReportJob)
+	mux.HandleFunc("POST /workflows", handleSubmitWorkflow)
+	mux.HandleFunc("GET /workflows/{id}", handleGetWorkflow)
 	mux.HandleFunc("GET /system/workers", handleListWorkers)
 	mux.HandleFunc("GET /system/stats", handleStats)
 	mux.HandleFunc("POST /system/chaos/kill", handleChaosKill)

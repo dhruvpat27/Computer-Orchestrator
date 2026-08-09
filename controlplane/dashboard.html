@@ -265,7 +265,7 @@
     <div class="card">
       <h2>Recent Jobs</h2>
       <table>
-        <thead><tr><th>ID</th><th>Task</th><th>Status</th><th>Attempt</th><th>Updated</th></tr></thead>
+        <thead><tr><th>ID</th><th>Workflow</th><th>Task</th><th>Status</th><th>Attempt</th><th>Updated</th></tr></thead>
         <tbody id="jobs-body"></tbody>
       </table>
     </div>
@@ -297,6 +297,13 @@
         <button type="submit">Submit Job</button>
       </form>
     </div>
+    <div class="card">
+      <h2>Submit Test Pipeline</h2>
+      <div class="subtitle" style="margin-bottom:12px;">3-stage DAG: fetch &rarr; train &rarr; evaluate. Watch dependent stages sit BLOCKED until their parent succeeds.</div>
+      <form class="submit-form" id="pipeline-form">
+        <button type="submit">Submit 3-Stage Pipeline</button>
+      </form>
+    </div>
   </div>
 </div>
 
@@ -305,8 +312,8 @@
 <script>
 const REPLICA_PORTS = [8001, 8002, 8003];
 const STATUS_COLORS = {
-  PENDING: '#7C879E', QUEUED: '#5B8DEF', RUNNING: '#F5B942',
-  SUCCESS: '#4CC38A', FAILED_RETRY_PENDING: '#F2A65A', FAILED: '#F2545B'
+  PENDING: '#7C879E', QUEUED: '#5B8DEF', RUNNING: '#F5B942', BLOCKED: '#8A6FD1',
+  SUCCESS: '#4CC38A', FAILED_RETRY_PENDING: '#F2A65A', FAILED: '#F2545B', SKIPPED: '#5A6478'
 };
 
 function toast(msg, isErr) {
@@ -394,6 +401,7 @@ async function pollJobs() {
     document.getElementById('jobs-body').innerHTML = (jobs || []).map(j => `
       <tr>
         <td>${j.id.slice(0, 8)}</td>
+        <td>${j.workflow_id ? j.workflow_id.slice(0, 8) : '&mdash;'}</td>
         <td>${j.task_name}</td>
         <td><span class="badge" style="background:${STATUS_COLORS[j.status] || '#7C879E'}22;color:${STATUS_COLORS[j.status] || '#7C879E'}">${j.status}</span></td>
         <td>${j.attempt}/${j.max_retries}</td>
@@ -442,6 +450,30 @@ document.getElementById('submit-form').onsubmit = async (e) => {
     toast('submitted: ' + data.id.slice(0, 8));
   } catch (e) {
     toast('submit failed: ' + e.message, true);
+  }
+};
+
+document.getElementById('pipeline-form').onsubmit = async (e) => {
+  e.preventDefault();
+  const body = {
+    name: 'demo-pipeline',
+    tasks: [
+      { id: 'fetch', task_name: 'sleep_task', payload: { seconds: 2 } },
+      { id: 'train', task_name: 'flaky_task', payload: { fail_rate: 0.4 }, depends_on: ['fetch'], max_retries: 5 },
+      { id: 'evaluate', task_name: 'sleep_task', payload: { seconds: 1 }, depends_on: ['train'] }
+    ]
+  };
+  try {
+    const res = await fetch('/workflows', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    if (!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+    toast('pipeline submitted: ' + data.workflow_id.slice(0, 8));
+  } catch (e) {
+    toast('pipeline submit failed: ' + e.message, true);
   }
 };
 

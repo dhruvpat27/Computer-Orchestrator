@@ -31,7 +31,6 @@ services:
   # still accept job submissions but sit out of retry scheduling.
   controlplane-1:
     build: ./controlplane
-    restart: unless-stopped
     container_name: controlplane-1
     environment:
       DATABASE_URL: postgres://orchestrator:orchestrator@postgres:5432/orchestrator
@@ -49,7 +48,6 @@ services:
 
   controlplane-2:
     build: ./controlplane
-    restart: unless-stopped
     container_name: controlplane-2
     environment:
       DATABASE_URL: postgres://orchestrator:orchestrator@postgres:5432/orchestrator
@@ -67,7 +65,6 @@ services:
 
   controlplane-3:
     build: ./controlplane
-    restart: unless-stopped
     container_name: controlplane-3
     environment:
       DATABASE_URL: postgres://orchestrator:orchestrator@postgres:5432/orchestrator

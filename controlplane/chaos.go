@@ -13,10 +13,6 @@ import (
 	"time"
 )
 
-// dockerClient talks to the Docker Engine API over the socket mounted into
-// this container at /var/run/docker.sock. This is what gives chaos mode
-// real teeth - the control plane can reach out and kill other containers,
-// including its own sibling replicas.
 var dockerClient = &http.Client{
 	Transport: &http.Transport{
 		DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
@@ -78,9 +74,7 @@ func containerDisplayName(c dockerContainer) string {
 	return strings.TrimPrefix(c.Names[0], "/")
 }
 
-// --- HTTP handlers -------------------------------------------------------
-
-// handleListWorkers powers the dashboard's worker grid.
+func handleListWorkers(w http.ResponseWriter, r *http.Request) {
 func handleListWorkers(w http.ResponseWriter, r *http.Request) {
 	containers, err := dockerListContainers(r.Context(), "worker")
 	if err != nil {
@@ -99,13 +93,9 @@ func handleListWorkers(w http.ResponseWriter, r *http.Request) {
 }
 
 type chaosKillRequest struct {
-	Target string `json:"target"` // "random-worker" or an exact container name
+	Target string `json:"target"`
 }
 
-// handleChaosKill is the whole chaos-mode feature: given a target container
-// name (or the sentinel "random-worker"), kill it via the Docker API. This
-// is deliberately not gated behind "am I leader" - any replica that's still
-// alive can serve this, which is itself part of the point.
 func handleChaosKill(w http.ResponseWriter, r *http.Request) {
 	var req chaosKillRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {

@@ -48,13 +48,13 @@ func main() {
 	rdb = redis.NewClient(opt)
 	ctx := context.Background()
 
-	time.Sleep(3 * time.Second) // crude wait for control plane to come up - fine for a weekend project
+	time.Sleep(3 * time.Second)
 	log.Printf("worker %s starting, polling '%s'", workerID, queueKey)
 
 	for {
 		result, err := rdb.BRPop(ctx, 5*time.Second, queueKey).Result()
 		if err == redis.Nil {
-			continue // nothing queued, poll again
+			continue
 		}
 		if err != nil {
 			log.Printf("redis BRPOP error: %v", err)
@@ -62,7 +62,6 @@ func main() {
 			continue
 		}
 
-		// BRPop returns [key, value]
 		raw := result[1]
 		var msg QueueMessage
 		if err := json.Unmarshal([]byte(raw), &msg); err != nil {
@@ -126,10 +125,6 @@ func reportResult(jobID string, success bool, result map[string]any, errMsg stri
 	defer resp.Body.Close()
 }
 
-// postWithFailover tries each known control-plane replica in order and
-// returns on the first one that answers. This is what lets a worker keep
-// reporting job results even while one replica is down or mid-election -
-// no single control-plane instance is a hard dependency for the worker.
 func postWithFailover(path string, body []byte) (*http.Response, error) {
 	var lastErr error
 	for _, base := range controlPlanes {

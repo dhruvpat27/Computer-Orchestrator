@@ -9,7 +9,6 @@ import (
 
 const retryPollInterval = 2 * time.Second
 
-// backoffSeconds implements exponential backoff: attempt 1 -> 1s, 2 -> 2s, 3 -> 4s ...
 func backoffSeconds(attempt int) int {
 	if attempt < 1 {
 		attempt = 1
@@ -17,14 +16,6 @@ func backoffSeconds(attempt int) int {
 	return 1 << (attempt - 1)
 }
 
-// retryScheduler is the retry brain. Every couple seconds it looks for jobs
-// sitting in FAILED_RETRY_PENDING whose backoff window has elapsed, flips
-// them back to QUEUED, and pushes them back onto the Redis queue. This is
-// what turns a failure into real retry semantics instead of "oh well."
-//
-// Only the elected leader runs this. It checks isLeader on every tick and
-// exits cleanly the moment leadership is lost - runLeaderElection starts a
-// fresh one if/when this replica becomes leader again.
 func retryScheduler(ctx context.Context) {
 	ticker := time.NewTicker(retryPollInterval)
 	defer ticker.Stop()

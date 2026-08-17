@@ -37,8 +37,6 @@ func main() {
 	rdb = redis.NewClient(opt)
 	defer rdb.Close()
 
-	// Leader election runs forever in the background. It grants this replica
-	// the retry-scheduler job only when it holds the Postgres advisory lock.
 	replicaID := os.Getenv("REPLICA_ID")
 	if replicaID == "" {
 		replicaID = "unknown-replica"
@@ -71,9 +69,6 @@ func main() {
 	log.Fatal(srv.ListenAndServe())
 }
 
-// withCORS lets the dashboard - served from one replica's origin - poll the
-// /leader endpoint on the other two replicas (different ports = different
-// origins from the browser's point of view).
 func withCORS(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")

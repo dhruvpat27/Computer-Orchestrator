@@ -26,9 +26,6 @@ services:
       timeout: 3s
       retries: 10
 
-  # Three replicas of the same control-plane image. Only one will hold the
-  # Postgres advisory lock and act as leader at any given time - the others
-  # still accept job submissions but sit out of retry scheduling.
   controlplane-1:
     build: ./controlplane
     container_name: controlplane-1
@@ -84,7 +81,6 @@ services:
     build: ./worker
     environment:
       REDIS_URL: redis://redis:6379/0
-      # comma-separated list - worker tries each in order until one answers
       CONTROL_PLANE_URLS: "http://controlplane-1:8000,http://controlplane-2:8000,http://controlplane-3:8000"
     depends_on:
       postgres:
@@ -100,5 +96,4 @@ services:
 
 volumes:
   pgdata:
-
-# Run with 3 workers: docker compose up --build --scale worker=3
+ 

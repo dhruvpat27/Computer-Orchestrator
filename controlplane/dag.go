@@ -8,23 +8,6 @@ import (
 )
 
 const dagPollInterval = 2 * time.Second
-
-// dagScheduler is the DAG brain, running alongside retryScheduler under the
-// same leader-only gate (only one replica should ever be flipping these
-// statuses, for the same duplicate-work reason retries are leader-gated).
-//
-// Every tick it does two sweeps over jobs sitting in BLOCKED:
-//  1. Cascade failure: if ANY dependency permanently failed or was itself
-//     skipped, this job can never run - mark it SKIPPED so it doesn't wait
-//     forever. This naturally cascades multiple levels deep over a few
-//     ticks, since a job skipped this tick makes its own dependents
-//     eligible for skipping on the next tick.
-//  2. Promote: if EVERY dependency succeeded, the job is unblocked - flip
-//     it to QUEUED and push it onto the Redis queue.
-//
-// Order matters: skip-check runs first so a job with a mix of one failed
-// and one still-pending dependency gets correctly skipped rather than
-// waiting around for a promotion that can never happen.
 func dagScheduler(ctx context.Context) {
 	ticker := time.NewTicker(dagPollInterval)
 	defer ticker.Stop()

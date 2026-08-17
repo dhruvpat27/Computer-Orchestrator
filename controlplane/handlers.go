@@ -13,8 +13,6 @@ func handleHealth(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
-// handleLeaderStatus lets you (or a dashboard) ask any replica "are you in
-// charge right now?" - this is what makes leadership visible from outside.
 func handleLeaderStatus(replicaID string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{
@@ -146,9 +144,6 @@ func handleStartJob(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]bool{"acknowledged": true})
 }
 
-// handleReportJob is the only write path workers have into job state - keeps
-// the control plane as the single source of truth and workers as dumb,
-// stateless executors. This is also where retry decisions get made.
 func handleReportJob(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	var req ReportRequest

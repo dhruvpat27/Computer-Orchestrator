@@ -28,10 +28,6 @@ type SubmitJobRequest struct {
 	MaxRetries int             `json:"max_retries"`
 }
 
-// TaskSpec is one node in a submitted workflow DAG. LocalID is scoped to
-// this submission only - the caller invents short names ("fetch_data",
-// "train") and references them in DependsOn; the server resolves these to
-// real job UUIDs before anything is inserted.
 type TaskSpec struct {
 	LocalID    string          `json:"id"`
 	TaskName   string          `json:"task_name"`
@@ -66,8 +62,6 @@ type ReportRequest struct {
 	Error   string          `json:"error,omitempty"`
 }
 
-// QueueMessage is what gets pushed onto the Redis list. Workers only need
-// enough to execute - Postgres remains the source of truth for full state.
 type QueueMessage struct {
 	JobID    string          `json:"job_id"`
 	TaskName string          `json:"task_name"`

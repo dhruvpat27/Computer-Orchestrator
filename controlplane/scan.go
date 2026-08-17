@@ -1,6 +1,5 @@
 package main
 
-// rowScanner abstracts over pgx.Row (QueryRow) so scanJob works for single-row lookups.
 type rowScanner interface {
 	Scan(dest ...any) error
 }

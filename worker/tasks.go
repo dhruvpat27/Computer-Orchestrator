@@ -7,7 +7,6 @@ import (
 	"time"
 )
 
-// TaskFunc executes one job and returns a JSON-serializable result or an error.
 type TaskFunc func(payload map[string]any) (map[string]any, error)
 
 var taskRegistry = map[string]TaskFunc{
@@ -40,8 +39,6 @@ func sleepTask(payload map[string]any) (map[string]any, error) {
 	return map[string]any{"slept": seconds}, nil
 }
 
-// flakyTask fails a configurable fraction of the time - handy for demoing
-// retries and chaos scenarios on demand.
 func flakyTask(payload map[string]any) (map[string]any, error) {
 	failRate := 0.6
 	if fr, ok := payload["fail_rate"].(float64); ok {
@@ -59,7 +56,6 @@ func randDuration(minSec, maxSec float64) time.Duration {
 	return time.Duration(s * float64(time.Second))
 }
 
-// decodePayload is a small helper so task funcs don't repeat json unmarshal boilerplate.
 func decodePayload(raw json.RawMessage) map[string]any {
 	var m map[string]any
 	_ = json.Unmarshal(raw, &m)

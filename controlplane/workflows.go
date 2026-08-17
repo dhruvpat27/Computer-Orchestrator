@@ -9,11 +9,6 @@ import (
 	"github.com/google/uuid"
 )
 
-// handleSubmitWorkflow accepts a whole DAG of tasks in one call, validates
-// it's actually acyclic, resolves the caller's short-lived local task IDs
-// into real job UUIDs, and inserts every job atomically in a single
-// transaction. Tasks with no dependencies go straight to QUEUED; everything
-// else starts BLOCKED and waits for dagScheduler to promote or skip it.
 func handleSubmitWorkflow(w http.ResponseWriter, r *http.Request) {
 	var req WorkflowSubmitRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -25,7 +20,6 @@ func handleSubmitWorkflow(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validate local IDs are unique and every depends_on reference is known.
 	seen := map[string]bool{}
 	for _, t := range req.Tasks {
 		if t.LocalID == "" {
@@ -47,8 +41,6 @@ func handleSubmitWorkflow(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Reject cycles up front - a workflow that can never complete shouldn't
-	// even be accepted, let alone silently sit BLOCKED forever.
 	if cyclePath := findCycle(req.Tasks); cyclePath != nil {
 		http.Error(w, fmt.Sprintf("dependency cycle detected: %v", cyclePath), http.StatusBadRequest)
 		return
@@ -113,8 +105,6 @@ func handleSubmitWorkflow(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Only push to Redis after the transaction commits - otherwise a worker
-	// could pick up a job whose row isn't visible yet.
 	for _, msg := range readyToQueue {
 		data, _ := json.Marshal(msg)
 		if err := rdb.LPush(ctx, queueKey, data).Err(); err != nil {
@@ -126,10 +116,6 @@ func handleSubmitWorkflow(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, WorkflowSubmitResponse{WorkflowID: workflowID, Tasks: results})
 }
 
-// findCycle runs a DFS with recursion-stack tracking over the submitted
-// task graph and returns the offending path if one exists, nil otherwise.
-// Classic white/gray/black coloring: white = unvisited, gray = on the
-// current DFS stack (visiting it again means a cycle), black = fully done.
 func findCycle(tasks []TaskSpec) []string {
 	adj := make(map[string][]string, len(tasks))
 	for _, t := range tasks {
@@ -175,9 +161,6 @@ func findCycle(tasks []TaskSpec) []string {
 	return nil
 }
 
-// handleGetWorkflow returns every job in a workflow plus a rolled-up status:
-// FAILED if anything failed or was skipped, SUCCESS if everything succeeded,
-// otherwise RUNNING.
 func handleGetWorkflow(w http.ResponseWriter, r *http.Request) {
 	workflowID := r.PathValue("id")
 
@@ -214,7 +197,6 @@ func handleGetWorkflow(w http.ResponseWriter, r *http.Request) {
 		case "FAILED", "SKIPPED":
 			overall = "FAILED"
 		case "SUCCESS":
-			// no-op, stays whatever it currently is
 		default:
 			if overall != "FAILED" {
 				overall = "RUNNING"

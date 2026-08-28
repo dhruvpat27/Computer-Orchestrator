@@ -4,7 +4,7 @@ CREATE TABLE IF NOT EXISTS jobs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     task_name TEXT NOT NULL,
     payload JSONB NOT NULL DEFAULT '{}'::jsonb,
-    status TEXT NOT NULL DEFAULT 'PENDING',   -- PENDING, BLOCKED, QUEUED, RUNNING, FAILED_RETRY_PENDING, SUCCESS, FAILED, SKIPPED
+    status TEXT NOT NULL DEFAULT 'PENDING',   
     retries_left INT NOT NULL DEFAULT 3,
     max_retries INT NOT NULL DEFAULT 3,
     attempt INT NOT NULL DEFAULT 0,
@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS jobs (
     next_retry_at TIMESTAMPTZ,
     worker_id TEXT,
     workflow_id UUID,
-    depends_on JSONB NOT NULL DEFAULT '[]'::jsonb,  -- array of job-id strings within the same workflow
+    depends_on JSONB NOT NULL DEFAULT '[]'::jsonb,  
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );

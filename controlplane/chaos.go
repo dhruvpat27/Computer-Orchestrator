@@ -130,8 +130,6 @@ func handleChaosKill(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"killed": target})
 }
 
-// handleStats aggregates queue depth + job status counts for the dashboard,
-// so the frontend can do one fetch instead of assembling this itself.
 func handleStats(w http.ResponseWriter, r *http.Request) {
 	depth, err := rdb.LLen(r.Context(), queueKey).Result()
 	if err != nil {

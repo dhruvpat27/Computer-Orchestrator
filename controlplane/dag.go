@@ -8,6 +8,8 @@ import (
 )
 
 const dagPollInterval = 2 * time.Second
+
+
 func dagScheduler(ctx context.Context) {
 	ticker := time.NewTicker(dagPollInterval)
 	defer ticker.Stop()

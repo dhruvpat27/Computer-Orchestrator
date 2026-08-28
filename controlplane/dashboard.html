@@ -440,6 +440,7 @@ document.getElementById('submit-form').onsubmit = async (e) => {
   const payload = task_name === 'flaky_task'
     ? { fail_rate: parseFloat(document.getElementById('fail-rate').value) }
     : {};
+  
   try {
     const res = await fetch('/jobs', {
       method: 'POST',
@@ -448,13 +449,19 @@ document.getElementById('submit-form').onsubmit = async (e) => {
     });
     const data = await res.json();
     toast('submitted: ' + data.id.slice(0, 8));
+
+
   } catch (e) {
     toast('submit failed: ' + e.message, true);
   }
 };
 
+
 document.getElementById('pipeline-form').onsubmit = async (e) => {
+
   e.preventDefault();
+
+
   const body = {
     name: 'demo-pipeline',
     tasks: [

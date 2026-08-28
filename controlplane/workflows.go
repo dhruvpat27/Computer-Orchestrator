@@ -57,7 +57,7 @@ func handleSubmitWorkflow(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "failed to start transaction", http.StatusInternalServerError)
 		return
 	}
-	defer tx.Rollback(ctx) // no-op if committed
+	defer tx.Rollback(ctx)
 
 	results := make([]WorkflowTaskResult, 0, len(req.Tasks))
 	var readyToQueue []QueueMessage

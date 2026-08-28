@@ -145,40 +145,6 @@ Workflow tasks with dependencies additionally start in:
   SKIPPED
 ```
 
-## Architecture
-
-- **Control plane** (`controlplane/`) - Go HTTP service, 3 replicas. Owns
-  all state in Postgres. Any replica can accept submissions and report
-  results (safe to duplicate), but only the elected **leader** runs the
-  retry-scheduler goroutine - running that on multiple replicas at once
-  would double-requeue the same job.
-- **Leader election** (`controlplane/leader.go`) - each replica holds a
-  dedicated Postgres connection and repeatedly attempts
-  `pg_try_advisory_lock`. Whoever holds the connection holds the lock;
-  the connection dying (crash, kill, network drop) releases the lock
-  automatically, no custom failure detection needed.
-- **Chaos mode** (`controlplane/chaos.go`) - each control-plane container
-  has `/var/run/docker.sock` mounted in, giving it a real (unauthenticated,
-  local-only) client to the Docker Engine API. The dashboard's kill buttons
-  hit `/system/chaos/kill`, which lists or kills containers directly -
-  no separate proxy or orchestration tool needed.
-- **Dashboard** (`controlplane/dashboard.html`, embedded via `go:embed`) -
-  polls each replica's `/leader`, plus this replica's `/system/workers`,
-  `/system/stats`, and `/jobs`, every 2 seconds.
-- **DAG scheduler** (`controlplane/dag.go`, `controlplane/workflows.go`) -
-  workflows are submitted as a graph of tasks with local names and
-  dependencies; the server validates it's acyclic (DFS cycle check) before
-  inserting anything, resolves local names to real job UUIDs, and inserts
-  the whole graph in one transaction. A leader-gated background sweep
-  promotes BLOCKED jobs once every dependency succeeds, and cascades
-  SKIPPED status down the graph the moment a dependency permanently fails.
-- **Worker** (`worker/`) - polls Redis with `BRPOP`, executes the named
-  task, reports back to whichever control-plane replica answers first
-  (`CONTROL_PLANE_URLS`, tried in order). Holds no state of its own.
-- **Redis** - the queue, decouples control plane from workers.
-- **Postgres** - source of truth for job state, and the leader-election
-  mechanism.
-
 ## What's next (not built yet)
 
 - **Live dashboard over WebSockets** - right now it's 2-second polling,

@@ -5,7 +5,6 @@ import (
 	"net/http"
 )
 
-//go:embed dashboard.html
 var dashboardHTML []byte
 
 func handleDashboard(w http.ResponseWriter, r *http.Request) {
